@@ -4,9 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "workspaces": [
-  "electron",
-  "web",
-    "packages/*"
+    "web"
   ],
   "scripts": {
   "dev": "npm run dev -w web",
@@ -17,6 +15,8 @@
     "format": "prettier -w ."
   },
   "devDependencies": {
+  "@typescript-eslint/eslint-plugin": "^8.7.0",
+  "@typescript-eslint/parser": "^8.7.0",
     "eslint": "^9.10.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-import": "^2.29.1",

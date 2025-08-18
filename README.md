@@ -2,7 +2,7 @@
 
 ## Web版への移行について
 
-このリポジトリは Electron を使わず、ローカルで動作するブラウザ向け Web アプリに再構成しました。新しいアプリは `web/` ワークスペースで動作します。既存の Electron プロジェクトは残していますが、デフォルトの実行対象は Web 版です。
+このリポジトリはElectronを廃止し、ブラウザで動作するVue 3+ViteのWebアプリとして再構成しました。アプリは`web/`ワークスペースで動作します。
 
 ## 使い方
 
@@ -55,12 +55,6 @@ npm i
 npm run dev
 ```
 
-Then run Electron:
-```bash
-npm -w electron run start
-```
-
 ## Notes
 - MathJax preview supports inline `$...$` and block `$$...$$` in the preview text.
-- Persistence: TODO switch to SQLite/TypeORM per architecture; store is in-memory now.
-- Keyboard shortcuts: Can be wired later using `electron` global shortcuts or renderer handlers.
+- Persistence: TODO switch to IndexedDB for Web; current store uses localStorage.
