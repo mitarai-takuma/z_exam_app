@@ -1,1 +1,0 @@
-"use strict";const e=require("electron"),o={openCSV:()=>e.ipcRenderer.invoke("dialog:openCSV"),saveCSV:()=>e.ipcRenderer.invoke("dialog:saveCSV"),readFile:(i,r="utf-8")=>e.ipcRenderer.invoke("fs:readFile",i,r),writeFile:(i,r,n="utf-8")=>e.ipcRenderer.invoke("fs:writeFile",i,r,n)};e.contextBridge.exposeInMainWorld("api",o);
