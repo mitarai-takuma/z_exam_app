@@ -18,7 +18,7 @@
         <question-tree :questions="filtered" :selected-id="selectedId" @select="select" />
       </el-aside>
       <el-main>
-        <question-editor v-if="selected" :question="selected" @update="onUpdate" />
+  <question-editor v-if="selected" :key="selectedKey" :question="selected" @update="onUpdate" />
         <div v-else class="empty">テスト問題がありません</div>
       </el-main>
     </el-container>
@@ -46,14 +46,15 @@ onBeforeUnmount(() => {
 })
 
 const filtered = computed(() => store.filter(keyword.value))
-const selected = computed(() => (selectedId.value ? store.getById(selectedId.value) : null))
+const selected = computed(() => (selectedId.value != null ? store.getById(selectedId.value) : null))
+const selectedKey = computed(() => (selectedId.value != null ? `q-${selectedId.value}` : undefined))
 
 function select(id: number) {
   selectedId.value = id
 }
 
 function onUpdate(payload: any) {
-  if (selectedId.value) store.update(selectedId.value, payload)
+  if (selectedId.value != null) store.update(selectedId.value, payload)
 }
 
 async function onImport() {
@@ -89,4 +90,8 @@ function onKey(e: KeyboardEvent) {
 <style>
 body, html { margin: 0; }
 .empty { color: #999; padding: 24px; }
+/* Prevent LaTeX (MathJax) from being vertically clipped in tight line boxes */
+mjx-container { overflow: visible !important; }
+/* Slightly relax line-height for containers that include formulas */
+.math-content, mjx-container * { line-height: 1.2; }
 </style>

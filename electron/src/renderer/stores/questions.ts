@@ -19,7 +19,7 @@ export const useQuestionsStore = defineStore('questions', {
   const db = await getDb()
   const repo = db.getRepository(QuestionEntity)
   const all = await repo.find()
-  this.items = all.map((e) => ({ ...e }))
+  this.items = all.map((e: any) => ({ ...e }))
     },
     getById(id: number) {
       return this.items.find((x) => x.id === id) || null
@@ -51,14 +51,25 @@ export const useQuestionsStore = defineStore('questions', {
       const text = await window.api.readFile(file, 'utf-8')
       const records = csvParse(text, { columns: true, skip_empty_lines: true }) as any[]
       for (const r of records) {
+        // Skip rows without round/section information
+        const roundRaw = r['回']
+        const sectionRaw = r['セクション']
+        const roundNum = Number(roundRaw)
+        const sectionNum = Number(sectionRaw)
+        if (
+          roundRaw == null || sectionRaw == null || String(roundRaw).trim() === '' || String(sectionRaw).trim() === '' ||
+          Number.isNaN(roundNum) || Number.isNaN(sectionNum)
+        ) {
+          continue
+        }
         const q: Question = {
           id: Number(r['ID'] || genId(this.items)),
           for_quiz: r['確認テスト利用'] === 'true' || r['確認テスト利用'] === '1' || r['確認テスト利用'] === true,
           for_exam:
             r['単位認定試験利用'] === 'true' || r['単位認定試験利用'] === '1' || r['単位認定試験利用'] === true,
           difficulty: Number(r['想定難易度'] || r['難易度'] || 1),
-          round: Number(r['回'] || 1),
-          section: Number(r['セクション'] || 1),
+          round: roundNum,
+          section: sectionNum,
           text: String(r['問題文'] || ''),
           choiceA: String(r['選択肢A'] || ''),
           choiceB: String(r['選択肢B'] || ''),
