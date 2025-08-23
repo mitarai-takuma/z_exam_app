@@ -13,11 +13,13 @@
     "csv-parse": "^5.5.6",
     "csv-stringify": "^6.5.2",
     "element-plus": "^2.8.3",
+    "markdown-it": "^14.1.0",
     "mathjax": "^3.2.2",
     "pinia": "^2.2.4",
     "vue": "^3.5.3"
   },
   "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
     "@vitejs/plugin-vue": "^4.6.2",
     "typescript": "^5.5.4",
     "vite": "^4.5.3",

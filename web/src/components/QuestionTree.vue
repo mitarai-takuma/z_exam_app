@@ -4,8 +4,10 @@
       :data="treeData"
       node-key="key"
       :props="{ label: 'label', children: 'children' }"
-      @node-click="onNode"
+  @node-click="onNode"
+  @node-expand="onNodeExpand"
       highlight-current
+  :current-node-key="currentKey"
       :default-expand-all="false"
     />
   </div>
@@ -37,6 +39,19 @@ const treeData = computed(() => {
   }))
   return result
 })
+
+const currentKey = computed(() => (props.selectedId != null ? `q-${props.selectedId}` : undefined))
+
+// When a round (回) node is expanded, expand all its child section nodes
+function onNodeExpand(data: any, node: any) {
+  const key: string = String(data?.key ?? '')
+  if (/^r-\d+$/.test(key) && Array.isArray(node?.childNodes)) {
+    node.childNodes.forEach((child: any) => {
+  if (typeof child?.expand === 'function') child.expand()
+      else if (child) child.expanded = true
+    })
+  }
+}
 
 function onNode(node: any) {
   const m = String(node.key).match(/^q-(\d+)$/)

@@ -1,12 +1,19 @@
 <template>
-  <div ref="container"></div>
+  <div ref="container" class="math-content"></div>
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
+import MarkdownIt from 'markdown-it'
+import { ensureMathJax } from '../lib/mathjax'
 
 const props = defineProps<{ content: string }>()
 const container = ref<HTMLElement | null>(null)
+const md = new MarkdownIt({
+  html: false, // do not allow raw HTML for safety
+  linkify: true,
+  breaks: true,
+})
 
 onMounted(() => render())
 watch(
@@ -16,11 +23,11 @@ watch(
 
 async function render() {
   if (!container.value) return
-  const mj = await import('mathjax/es5/tex-mml-chtml.js')
-  container.value.innerHTML = ''
-  const div = document.createElement('div')
-  div.textContent = props.content
-  container.value.appendChild(div)
+  // Convert Markdown to HTML first
+  const html = md.render(props.content || '')
+  container.value.innerHTML = html
+  // Ensure MathJax is loaded and configured, then typeset
+  await ensureMathJax()
   // @ts-ignore
   ;(window as any).MathJax?.typesetPromise?.([container.value])
 }

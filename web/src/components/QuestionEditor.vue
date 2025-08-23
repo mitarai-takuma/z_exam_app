@@ -50,6 +50,14 @@ const emit = defineEmits<{ (e: 'update', q: Partial<Question>): void }>()
 
 const local = reactive({ ...props.question })
 
+// Sync local form when selected question changes
+watch(
+  () => props.question,
+  (q) => {
+    Object.assign(local, q)
+  },
+)
+
 watch(local, () => emit('update', { ...local }), { deep: true })
 
 const previewText = computed(() =>
