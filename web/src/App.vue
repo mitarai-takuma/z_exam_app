@@ -31,7 +31,7 @@
     <!-- サイドバー＋メインエリア -->
     <el-container>
       <!-- サイドバー：問題ツリー -->
-      <el-aside width="33%" style="border-right: 1px solid var(--el-border-color)">
+  <el-aside width="var(--el-aside-width)" style="border-right: 1px solid var(--el-border-color)">
         <question-tree v-bind:questions="filtered" v-bind:selected-id="selectedId" v-on:select="select" />
       </el-aside>
       <!-- メインエリア：問題エディタ or 空表示 -->
