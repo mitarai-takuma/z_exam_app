@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import type { Question } from '../types'
+import { DIFFICULTY_VALUES } from '../types'
 import { parse as csvParse } from 'csv-parse/browser/esm/sync'
 import { stringify as csvStringify } from 'csv-stringify/browser/esm/sync'
 import { getDatabase } from '../utils/sqlite'
@@ -17,6 +18,25 @@ export const useQuestionsStore = defineStore('questions', {
     dirty: false,
   }),
   actions: {
+    // 難易度の正規化（4つのラベルへ）
+    sanitizeDifficulty(value: any): Question['difficulty'] {
+      if (typeof value === 'string') {
+        if ((DIFFICULTY_VALUES as readonly string[]).includes(value)) {
+          return value as Question['difficulty']
+        }
+        const m = value.match(/^\s*([1-4])/)
+        if (m) {
+          const idx = Number(m[1]) as 1 | 2 | 3 | 4
+          return DIFFICULTY_VALUES[idx - 1] as Question['difficulty']
+        }
+      }
+      const n = Number(value)
+      if (!Number.isNaN(n)) {
+        const c = n < 1 ? 1 : n > 4 ? 4 : Math.round(n)
+        return DIFFICULTY_VALUES[c - 1] as Question['difficulty']
+      }
+      return DIFFICULTY_VALUES[0] as Question['difficulty']
+    },
     // SQLiteからデータを読み込み
     async load() {
       try {
@@ -112,7 +132,7 @@ export const useQuestionsStore = defineStore('questions', {
         const records = csvParse(text, { columns: true, skip_empty_lines: true }) as any[]
         const importedQuestions: Question[] = []
         
-        for (const r of records) {
+  for (const r of records) {
           // 回・セクション情報がない行はスキップ
           const roundRaw = r['回']
           const sectionRaw = r['セクション']
@@ -129,7 +149,7 @@ export const useQuestionsStore = defineStore('questions', {
             id: Number(r['ID'] || genId(importedQuestions)),
             for_quiz: r['確認テスト利用'] === 'true' || r['確認テスト利用'] === '1' || r['確認テスト利用'] === true,
             for_exam: r['単位認定試験利用'] === 'true' || r['単位認定試験利用'] === '1' || r['単位認定試験利用'] === true,
-            difficulty: Number(r['想定難易度'] || r['難易度'] || 1),
+            difficulty: this.sanitizeDifficulty(r['想定難易度'] ?? r['難易度'] ?? DIFFICULTY_VALUES[0]),
             round: roundNum,
             section: sectionNum,
             text: String(r['問題文'] || ''),
