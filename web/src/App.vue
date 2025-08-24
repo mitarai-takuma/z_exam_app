@@ -155,7 +155,7 @@ function onKey(e: KeyboardEvent) {
 <style>
 body, html { margin: 0; }
 .empty { color: #999; padding: 24px; }
-/* Prevent LaTeX (MathJax) from being vertically clipped in tight line boxes */
+/* Prevent LaTeX (KaTeX/MathML) from being vertically clipped in tight line boxes */
 mjx-container { overflow: visible !important; }
 /* Slightly relax line-height for containers that include formulas */
 .math-content, mjx-container * { line-height: 1.2; }
