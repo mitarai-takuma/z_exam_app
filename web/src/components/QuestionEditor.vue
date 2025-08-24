@@ -36,14 +36,14 @@
     </el-form>
     <el-divider />
     <h4>プレビュー</h4>
-    <mathjax-preview :content="previewText" />
+  <markdown-katex-preview :content="previewText" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue'
 import type { Question } from '../types'
-import MathjaxPreview from './MathjaxPreview.vue'
+import MarkdownKatexPreview from './MarkdownKatexPreview.vue'
 
 const props = defineProps<{ question: Question }>()
 const emit = defineEmits<{ (e: 'update', q: Partial<Question>): void }>()
