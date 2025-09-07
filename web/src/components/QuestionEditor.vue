@@ -10,9 +10,14 @@
       </el-form-item>
 
       <!-- メタ情報 -->
-      <el-form-item label="難易度*">
-        <el-select v-model="local.difficulty" style="width: 120px">
-          <el-option v-for="n in 4" :key="n" :label="n" :value="n" />
+      <el-form-item label="想定難易度*">
+        <el-select v-model="local.difficulty" style="width: 220px">
+          <el-option
+            v-for="opt in DIFFICULTY_VALUES"
+            :key="opt"
+            :label="opt"
+            :value="opt"
+          />
         </el-select>
       </el-form-item>
       <el-form-item label="回*">
@@ -75,10 +80,10 @@
       <!-- 正解: セレクト直下にプレビュー -->
       <el-form-item label="正解*">
         <el-select v-model="local.answer" style="width: 120px">
-          <el-option label="A" value="A" />
-          <el-option label="B" value="B" />
-          <el-option label="C" value="C" />
-          <el-option label="D" value="D" />
+          <el-option label="選択肢A" value="選択肢A" />
+          <el-option label="選択肢B" value="選択肢B" />
+          <el-option label="選択肢C" value="選択肢C" />
+          <el-option label="選択肢D" value="選択肢D" />
         </el-select>
       </el-form-item>
 
@@ -103,6 +108,7 @@
 <script setup lang="ts">
 import { reactive, watch } from 'vue'
 import type { Question } from '../types'
+import { DIFFICULTY_VALUES } from '../types'
 import MarkdownKatexPreview from './MarkdownKatexPreview.vue'
 
 // props/emit 定義

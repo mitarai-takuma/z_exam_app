@@ -1,6 +1,6 @@
-export type Answer = 'A' | 'B' | 'C' | 'D'
-// 想定難易度: 1(90%) | 2(70%) | 3(50%) | 4(30%) のみ許可
-// Difficulty type: labeled strings per spec
+export type Answer = '選択肢A' | '選択肢B' | '選択肢C' | '選択肢D'
+// 想定難易度: 1(90％程度正答) | 2(70％程度正答) | 3(50％程度正答) | 4(30％程度正答) のみ許可
+// Difficulty type: labeled strings as per specification
 export const DIFFICULTY_VALUES = [
   "1(90％程度正答)",
   "2(70％程度正答)",
