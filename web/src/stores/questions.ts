@@ -77,6 +77,70 @@ function buildQuestionMarkdown(q: Question): string {
   ]
   return lines.join('\n')
 }
+
+// Markdownファイルからデータを解析
+function parseMarkdownQuestion(content: string, filePath: string): Question {
+  const lines = content.split('\n')
+  const data: Record<string, string> = {}
+  
+  let currentSection = ''
+  let currentContent: string[] = []
+  
+  for (const line of lines) {
+    if (line.startsWith('## ')) {
+      // 前のセクションの内容を保存
+      if (currentSection) {
+        data[currentSection] = currentContent.join('\n').trim()
+      }
+      // 新しいセクションを開始
+      currentSection = line.substring(3).trim()
+      currentContent = []
+    } else {
+      currentContent.push(line)
+    }
+  }
+  
+  // 最後のセクションを保存
+  if (currentSection) {
+    data[currentSection] = currentContent.join('\n').trim()
+  }
+  
+  // 必須フィールドをチェック
+  const requiredFields = ['ID', '回', 'セクション']
+  for (const field of requiredFields) {
+    if (!data[field]) {
+      throw new Error(`必須フィールド "${field}" が見つかりません (ファイル: ${filePath})`)
+    }
+  }
+  
+  // データを変換
+  const id = Number(data['ID'])
+  const round = Number(data['回'])
+  const section = Number(data['セクション'])
+  
+  if (Number.isNaN(id) || Number.isNaN(round) || Number.isNaN(section)) {
+    throw new Error(`数値フィールドの変換に失敗しました (ファイル: ${filePath})`)
+  }
+  
+  const question: Question = {
+    id,
+    for_quiz: data['確認テスト利用'] === 'TRUE',
+    for_exam: data['単位認定試験利用'] === 'TRUE',
+    difficulty: data['想定難易度'] as Question['difficulty'] || DIFFICULTY_VALUES[0],
+    round,
+    section,
+    text: data['問題文'] || '',
+    choiceA: data['選択肢A'] || '',
+    choiceB: data['選択肢B'] || '',
+    choiceC: data['選択肢C'] || '',
+    choiceD: data['選択肢D'] || '',
+    answer: (['選択肢A', '選択肢B', '選択肢C', '選択肢D'].includes(data['正解']) ? data['正解'] : '選択肢A') as Question['answer'],
+    explanation: data['解説'] || '',
+    memo: '',
+  }
+  
+  return question
+}
 // ---- 追加ここまで ----
 
 export const useQuestionsStore = defineStore('questions', {
@@ -252,6 +316,111 @@ export const useQuestionsStore = defineStore('questions', {
       } catch (error) {
         console.error('CSVインポートエラー:', error)
         throw error
+      }
+    },
+    // ---- 追加: Markdownインポート（File System Access API使用） ----
+    async importMarkdown(): Promise<void> {
+      try {
+        if (typeof window.showDirectoryPicker !== 'function') {
+          throw new Error('このブラウザはフォルダ選択に対応していません。Chrome/Edge系 + HTTPS(またはlocalhost)でお試しください。')
+        }
+
+        // ユーザーがベースディレクトリを選択
+        const rootDir = await window.showDirectoryPicker({
+          id: 'z-exam-app-import',
+          mode: 'read',
+          startIn: 'documents',
+        })
+
+        const importedQuestions: Question[] = []
+        const failedFiles: string[] = []
+
+        // ディレクトリを再帰的に処理
+        await this.processDirectory(rootDir, '', importedQuestions, failedFiles)
+
+        // エラーハンドリング
+        if (failedFiles.length > 0 && importedQuestions.length === 0) {
+          throw new Error(`すべてのファイルの処理に失敗しました。\n失敗したファイル:\n${failedFiles.join('\n')}`)
+        }
+
+        if (failedFiles.length > 0) {
+          // 一部失敗した場合、ユーザーに確認
+          const proceed = window.confirm(
+            `一部のファイルの処理に失敗しました。\n\n` +
+            `成功: ${importedQuestions.length}件\n` +
+            `失敗: ${failedFiles.length}件\n\n` +
+            `失敗したファイル:\n${failedFiles.slice(0, 5).join('\n')}${failedFiles.length > 5 ? '\n...' : ''}\n\n` +
+            `成功したファイルのみDBに反映しますか？`
+          )
+          
+          if (!proceed) {
+            return
+          }
+        }
+
+        if (importedQuestions.length === 0) {
+          window.alert('インポートできるMarkdownファイルが見つかりませんでした。')
+          return
+        }
+
+        // メモリ上のデータを最新Markdownの内容で完全に上書き
+        this.items = importedQuestions
+        this.dirty = true
+        
+        // SQLiteデータベースを上書き保存
+        const db = await getDatabase()
+        await db.saveAllQuestions(importedQuestions)
+        this.dirty = false
+        
+        // 成功メッセージ
+        const message = failedFiles.length > 0 
+          ? `Markdownインポートが完了しました。\n成功: ${importedQuestions.length}件\n失敗: ${failedFiles.length}件`
+          : `Markdownインポートが完了しました。${importedQuestions.length}件をインポートしました。`
+        
+        window.alert(message)
+        console.log('Markdownからインポートしました:', importedQuestions.length, '件')
+        
+      } catch (error) {
+        console.error('Markdownインポートエラー:', error)
+        throw error
+      }
+    },
+
+    // ディレクトリを再帰的に処理してMarkdownファイルを読み込み
+    async processDirectory(
+      dir: FileSystemDirectoryHandle, 
+      path: string, 
+      importedQuestions: Question[], 
+      failedFiles: string[]
+    ): Promise<void> {
+      for await (const entry of dir.values()) {
+        const entryPath = path ? `${path}/${entry.name}` : entry.name
+
+        if (entry.kind === 'directory') {
+          // サブディレクトリを再帰的に処理
+          await this.processDirectory(entry, entryPath, importedQuestions, failedFiles)
+        } else if (entry.kind === 'file' && entry.name.endsWith('.md')) {
+          try {
+            // Markdownファイルを読み込み
+            const file = await entry.getFile()
+            const content = await file.text()
+            
+            // ファイル内容を解析
+            const question = parseMarkdownQuestion(content, entryPath)
+            
+            // 同一IDが既に存在する場合は後勝ちで上書き
+            const existingIndex = importedQuestions.findIndex(q => q.id === question.id)
+            if (existingIndex >= 0) {
+              importedQuestions[existingIndex] = question
+            } else {
+              importedQuestions.push(question)
+            }
+            
+          } catch (error: any) {
+            console.error(`ファイル処理エラー: ${entryPath}`, error)
+            failedFiles.push(`${entryPath}: ${error.message || error}`)
+          }
+        }
       }
     },
     // CSVファイルへのエクスポート

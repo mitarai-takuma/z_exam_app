@@ -20,7 +20,9 @@
           <!-- CSVインポート用ファイル選択（非表示） -->
           <input ref="fileInput" type="file" accept=".csv,text/csv" style="display:none" v-on:change="onFileChange" />
           <!-- インポートボタン -->
-          <el-button size="small" v-on:click="triggerImport">インポート</el-button>
+          <el-button size="small" v-on:click="triggerImport">CSVインポート</el-button>
+          <!-- Markdownインポートボタン -->
+          <el-button size="small" v-on:click="triggerMarkdownImport">Markdownインポート</el-button>
           <!-- エクスポートボタン -->
           <el-button size="small" v-on:click="onExport">CSVエクスポート</el-button>
           <!-- Markdownエクスポートボタン -->
@@ -124,6 +126,17 @@ async function onFileChange(e: Event) {
     console.error('CSVインポートエラー:', error)
   }
   input.value = ''
+}
+
+
+// Markdownインポートボタン押下時：ディレクトリ選択とMarkdownインポート処理
+async function triggerMarkdownImport() {
+  try {
+    await store.importMarkdown()
+  } catch (error: any) {
+    window.alert('Markdownインポートに失敗しました: ' + (error?.message || error))
+    console.error('Markdownインポートエラー:', error)
+  }
 }
 
 
