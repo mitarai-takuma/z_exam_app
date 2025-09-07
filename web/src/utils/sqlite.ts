@@ -90,8 +90,12 @@ export class SQLiteManager {
     try {
       // データベースをバイナリデータとしてエクスポート
       const data = this.db.export()
-      // Base64エンコードしてLocalStorageに保存
-      const base64Data = btoa(String.fromCharCode(...data))
+      // Base64エンコードしてLocalStorageに保存（安全な方法で変換）
+      let binary = ''
+      for (let i = 0; i < data.length; i++) {
+        binary += String.fromCharCode(data[i])
+      }
+      const base64Data = btoa(binary)
       localStorage.setItem('sqlite_db_data', base64Data)
     } catch (e: any) {
       // LocalStorage容量不足やシリアライズ失敗などの原因を判別
@@ -144,28 +148,28 @@ export class SQLiteManager {
 
     // トランザクション開始
     this.db.run('BEGIN TRANSACTION')
-
+    let committed = false
     try {
       // 既存データを削除
       this.db.run('DELETE FROM questions')
 
       // 新しいデータを挿入
-  const insertSQL = `
+      const insertSQL = `
         INSERT INTO questions (
           id, for_quiz, for_exam, difficulty, round, section,
           text, choiceA, choiceB, choiceC, choiceD, answer, explanation, memo
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `
 
-  const stmt = this.db.prepare(insertSQL)
+      const stmt = this.db.prepare(insertSQL)
       try {
-    for (const question of questions) {
+        for (const question of questions) {
           try {
             stmt.run([
               question.id,
               question.for_quiz ? 1 : 0,
               question.for_exam ? 1 : 0,
-      this.sanitizeDifficulty(question.difficulty),
+              this.sanitizeDifficulty(question.difficulty),
               question.round,
               question.section,
               question.text,
@@ -189,6 +193,7 @@ export class SQLiteManager {
 
       // コミット
       this.db.run('COMMIT')
+      committed = true
 
       // ファイルに保存
       await this.saveDatabase()
@@ -198,10 +203,19 @@ export class SQLiteManager {
         this.logSaveSuccess(q.round, q.section, q.id)
       }
     } catch (error) {
-      // エラー時はロールバック
-      this.db.run('ROLLBACK')
+      // エラー時はロールバック（コミット済みなら不要）
+      if (!committed) {
+        try {
+          this.db.run('ROLLBACK')
+        } catch (rollbackErr) {
+          // ROLLBACK失敗は握りつぶす
+        }
+      }
       // エラー内容を詳細にして再スロー
       const msg = error instanceof Error ? error.message : String(error)
+      if (msg.includes('データベース保存に失敗しました')) {
+        throw error
+      }
       throw new Error(`データベース保存に失敗しました（原因: ${msg}）`)
     }
   }

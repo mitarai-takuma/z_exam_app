@@ -12,13 +12,71 @@ function genId(items: Question[]) {
   return (items.reduce((m, x) => Math.max(m, x.id), 0) || 0) + 1
 }
 
+// ---- 追加: エクスポート用ユーティリティ ----
+// yyyymmddHHMM 形式のタイムスタンプを生成
+function formatExportTimestamp(d = new Date()): string {
+  const pad2 = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}${pad2(d.getHours())}${pad2(d.getMinutes())}`
+}
+
+// 指定ディレクトリ内にサブディレクトリを作成（存在しなければ）
+async function ensureSubdir(parent: FileSystemDirectoryHandle, name: string): Promise<FileSystemDirectoryHandle> {
+  return await parent.getDirectoryHandle(name, { create: true })
+}
+
+// テキストファイルを書き込み（上書き）
+async function writeTextFile(dir: FileSystemDirectoryHandle, fileName: string, content: string): Promise<void> {
+  const fileHandle = await dir.getFileHandle(fileName, { create: true })
+  const writable = await fileHandle.createWritable()
+  await writable.write(content)
+  await writable.close()
+}
+
+// 単一問題のMarkdownを生成（ユーザー指定の構造に準拠）
+function buildQuestionMarkdown(q: Question): string {
+  const lines: string[] = [
+    '## 確認テスト利用',
+    q.for_quiz ? '1' : '0',
+    '',
+    '## 単位認定試験利用',
+    q.for_exam ? '1' : '0',
+    '',
+  '## 想定難易度',
+    q.difficulty,
+    '',
+    '## 問題文',
+    q.text ?? '',
+    '',
+    '## 選択肢A',
+    q.choiceA ?? '',
+    '',
+    '## 選択肢B',
+    q.choiceB ?? '',
+    '',
+    '## 選択肢C',
+    q.choiceC ?? '',
+    '',
+    '## 選択肢D',
+    q.choiceD ?? '',
+    '',
+    '## 正解',
+    q.answer,
+    '',
+    '## 解説',
+    q.explanation ?? '',
+    '',
+  ]
+  return lines.join('\n')
+}
+// ---- 追加ここまで ----
+
 export const useQuestionsStore = defineStore('questions', {
   state: () => ({
     items: [] as Question[],
     dirty: false,
   }),
   actions: {
-    // 難易度の正規化（4つのラベルへ）
+  // 想定難易度の正規化（指定の4ラベルへ）
     sanitizeDifficulty(value: any): Question['difficulty'] {
       if (typeof value === 'string') {
         if ((DIFFICULTY_VALUES as readonly string[]).includes(value)) {
@@ -128,49 +186,53 @@ export const useQuestionsStore = defineStore('questions', {
     async importCSV(text?: string) {
       if (!text) return
       
-      try {
-        const records = csvParse(text, { columns: true, skip_empty_lines: true }) as any[]
-        const importedQuestions: Question[] = []
-        
-  for (const r of records) {
-          // 回・セクション情報がない行はスキップ
-          const roundRaw = r['回']
-          const sectionRaw = r['セクション']
-          const roundNum = Number(roundRaw)
-          const sectionNum = Number(sectionRaw)
-          if (
-            roundRaw == null || sectionRaw == null || String(roundRaw).trim() === '' || String(sectionRaw).trim() === '' ||
-            Number.isNaN(roundNum) || Number.isNaN(sectionNum)
-          ) {
-            continue
-          }
-          
-          const q: Question = {
-            id: Number(r['ID'] || genId(importedQuestions)),
-            for_quiz: r['確認テスト利用'] === 'true' || r['確認テスト利用'] === '1' || r['確認テスト利用'] === true,
-            for_exam: r['単位認定試験利用'] === 'true' || r['単位認定試験利用'] === '1' || r['単位認定試験利用'] === true,
-            difficulty: this.sanitizeDifficulty(r['想定難易度'] ?? r['難易度'] ?? DIFFICULTY_VALUES[0]),
-            round: roundNum,
-            section: sectionNum,
-            text: String(r['問題文'] || ''),
-            choiceA: String(r['選択肢A'] || ''),
-            choiceB: String(r['選択肢B'] || ''),
-            choiceC: String(r['選択肢C'] || ''),
-            choiceD: String(r['選択肢D'] || ''),
-            answer: (['A', 'B', 'C', 'D'].includes(String(r['正解'])) ? (String(r['正解']) as any) : 'A') as Question['answer'],
-            explanation: String(r['正解に対する解説'] || r['解説'] || ''),
-            memo: String(r['メモ'] || ''),
-          }
-          
-          // 重複IDをチェックして追加
-          if (!importedQuestions.some((x) => x.id === q.id)) {
-            importedQuestions.push(q)
-          }
-        }
-        
-        // メモリ上のデータを更新
-        this.items = importedQuestions
-        this.dirty = true
+  try {
+    const records = csvParse(text, { columns: true, skip_empty_lines: true }) as any[]
+    // 最新のCSVの値で常に上書きされるよう、
+    // 同一IDが複数行存在する場合は「最後に出現した行」を採用する
+    const questionsById = new Map<number, Question>()
+    let importedQuestions: Question[] = []
+
+    for (const r of records) {
+      // 回・セクション情報がない行はスキップ
+      const roundRaw = r['回']
+      const sectionRaw = r['セクション']
+      const roundNum = Number(roundRaw)
+      const sectionNum = Number(sectionRaw)
+      if (
+        roundRaw == null || sectionRaw == null || String(roundRaw).trim() === '' || String(sectionRaw).trim() === '' ||
+        Number.isNaN(roundNum) || Number.isNaN(sectionNum)
+      ) {
+        continue
+      }
+
+      // genIdの引数として現時点のimportedQuestionsを渡す
+      const q: Question = {
+        id: Number(r['ID'] || genId(importedQuestions)),
+        for_quiz: r['確認テスト利用'] === 'true' || r['確認テスト利用'] === '1' || r['確認テスト利用'] === true,
+        for_exam: r['単位認定試験利用'] === 'true' || r['単位認定試験利用'] === '1' || r['単位認定試験利用'] === true,
+        difficulty: this.sanitizeDifficulty(r['想定難易度'] ?? r['難易度'] ?? DIFFICULTY_VALUES[0]),
+        round: roundNum,
+        section: sectionNum,
+        text: String(r['問題文'] || ''),
+        choiceA: String(r['選択肢A'] || ''),
+        choiceB: String(r['選択肢B'] || ''),
+        choiceC: String(r['選択肢C'] || ''),
+        choiceD: String(r['選択肢D'] || ''),
+        answer: (['選択肢A', '選択肢B', '選択肢C', '選択肢D'].includes(String(r['正解'])) ? (String(r['正解']) as any) : '選択肢A') as Question['answer'],
+        explanation: String(r['正解に対する解説'] || r['解説'] || ''),
+        memo: String(r['メモ'] || ''),
+      }
+
+      // 同一IDがすでに存在する場合は「後勝ち」で上書き
+      questionsById.set(q.id, q)
+      // importedQuestionsを都度更新
+      importedQuestions = Array.from(questionsById.values())
+    }
+
+    // メモリ上のデータを最新CSVの内容で完全に上書き
+    this.items = importedQuestions
+    this.dirty = true
         
         // SQLiteデータベースを上書き保存
         const db = await getDatabase()
@@ -206,5 +268,38 @@ export const useQuestionsStore = defineStore('questions', {
       console.log('CSVデータをエクスポートしました:', this.items.length, '件')
       return data
     },
+
+    // ---- 追加: Markdownエクスポート（File System Access API使用） ----
+    async exportMarkdown(): Promise<void> {
+      try {
+        if (typeof window.showDirectoryPicker !== 'function') {
+          throw new Error('このブラウザはフォルダ書き出しに対応していません。Chrome/Edge系 + HTTPS(またはlocalhost)でお試しください。')
+        }
+
+        // ユーザーがベースフォルダを選択
+        const rootDir = await window.showDirectoryPicker({
+          id: 'z-exam-app-export',
+          mode: 'readwrite',
+          startIn: 'documents',
+        })
+
+        // export_yyyymmddHHMM を作成
+        const exportDirName = `export_${formatExportTimestamp()}`
+        const exportDir = await ensureSubdir(rootDir, exportDirName)
+
+        // 回ごとのフォルダを作成し、各問題を書き込み
+        for (const q of this.items) {
+          const roundDir = await ensureSubdir(exportDir, String(q.round))
+          const fileName = `${q.round}-${q.section}-${q.id}.md`
+          await writeTextFile(roundDir, fileName, buildQuestionMarkdown(q))
+        }
+
+        console.log(`Markdownを書き出しました: ${this.items.length}件 -> ${exportDirName}/...`)
+      } catch (error) {
+        console.error('Markdown書き出しエラー:', error)
+        throw error
+      }
+    },
+    // ---- 追加ここまで ----
   },
 })

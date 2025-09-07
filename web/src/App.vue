@@ -22,9 +22,13 @@
           <!-- インポートボタン -->
           <el-button size="small" v-on:click="triggerImport">インポート</el-button>
           <!-- エクスポートボタン -->
-          <el-button size="small" v-on:click="onExport">エクスポート</el-button>
+          <el-button size="small" v-on:click="onExport">CSVエクスポート</el-button>
+          <!-- Markdownエクスポートボタン -->
+          <el-button size="small" v-on:click="onExportMarkdown">Markdownエクスポート</el-button>
           <!-- 保存ボタン -->
           <el-button type="primary" size="small" v-on:click="save">保存</el-button>
+                  <!-- データベース初期化ボタン -->
+                  <el-button type="danger" size="small" v-on:click="onInitDatabase">データベース初期化</el-button>
         </el-col>
       </el-row>
     </el-header>
@@ -45,9 +49,11 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
+import { ElMessageBox } from 'element-plus'
 import { useQuestionsStore } from './stores/questions'
 import QuestionTree from './components/QuestionTree.vue'
 import QuestionEditor from './components/QuestionEditor.vue'
+import { getDatabase } from './utils/sqlite'
 
 
 // 質問データストア
@@ -110,8 +116,13 @@ async function onFileChange(e: Event) {
   const input = e.target as HTMLInputElement
   const file = input.files && input.files[0]
   if (!file) return
-  const text = await file.text()
-  await store.importCSV(text)
+  try {
+    const text = await file.text()
+    await store.importCSV(text)
+  } catch (error: any) {
+    window.alert('CSVインポートに失敗しました: ' + (error?.message || error))
+    console.error('CSVインポートエラー:', error)
+  }
   input.value = ''
 }
 
@@ -129,11 +140,55 @@ async function onExport() {
 }
 
 
+// Markdownエクスポートボタン押下時：Markdownエクスポート処理
+async function onExportMarkdown() {
+  try {
+    await store.exportMarkdown()
+    window.alert('Markdownエクスポートが完了しました。')
+  } catch (error: any) {
+    window.alert('Markdownエクスポートに失敗しました: ' + (error?.message || error))
+  }
+}
+
 // 保存ボタン押下時：データ保存処理
 async function save() {
   await store.save()
 }
 
+// データベース初期化ボタン処理
+async function onInitDatabase() {
+  try {
+    await ElMessageBox.confirm(
+      '本当にデータベースを初期化（削除）しますか？この操作は元に戻せません。',
+      '確認',
+      {
+        confirmButtonText: '削除',
+        cancelButtonText: 'キャンセル',
+        type: 'warning',
+        closeOnClickModal: false,
+        closeOnPressEscape: false,
+      }
+    )
+  } catch {
+    // キャンセル時は何もしない
+    return
+  }
+  try {
+    // LocalStorageのDBデータを削除
+    localStorage.removeItem('sqlite_db_data')
+    // ストアのメモリ上データもクリア
+    store.items = []
+    store.dirty = false
+    // SQLiteManagerのインスタンスを再初期化
+    const db = await getDatabase()
+    await db.initialize()
+    await store.load()
+    window.alert('データベースを初期化しました。')
+  } catch (error: any) {
+    window.alert('データベース初期化に失敗しました: ' + (error?.message || error))
+    console.error('データベース初期化エラー:', error)
+  }
+}
 
 // ショートカットキー処理
 function onKey(e: KeyboardEvent) {
